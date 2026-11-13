@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Созвон</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><span class="mark">↘</span><div><h1>Созвон</h1><p>Выйти вовремя.</p></div></header>
+  <section class="status" aria-live="polite"><strong id="status">Проверяем…</strong><p id="details"></p><p id="count"></p></section>
+  <form id="form">
+    <label for="tab">Вкладка конференции</label><div class="row"><select id="tab" required></select><button id="refresh" type="button" title="Обновить список вкладок">↻</button></div>
+    <fieldset><legend><label><input type="checkbox" id="timed"> Закрыть в назначенное время</label></legend><input type="datetime-local" id="deadline" aria-label="Дата и время закрытия"><small>Местное время компьютера</small></fieldset>
+    <fieldset><legend><label><input type="checkbox" id="drop" checked> Закрыть при оттоке участников</label></legend>
+      <div class="grid"><label>Ушло не менее, %<input type="number" id="percent" value="30" min="1" max="100" required></label><label>И не менее, чел.<input type="number" id="minimum" value="3" min="1" max="10000" required></label><label>За последние, сек.<input type="number" id="windowSeconds" value="120" min="1" max="3600" required></label><label>Подтверждать, сек.<input type="number" id="graceSeconds" value="30" min="1" max="300" required></label></div>
+      <small>Например: было 20 → осталось 14 за 2 минуты. Если число остаётся низким ещё 30 секунд, вкладка закроется. При восстановлении числа участников отсчёт отменяется.</small>
+    </fieldset>
+    <p id="error" role="alert"></p>
+    <button class="primary" id="start" type="submit">Включить автозакрытие</button>
+    <button class="stop" id="stop" type="button">Отменить автозакрытие</button>
+  </form>
+  <footer>Работает, пока Chrome открыт и компьютер не спит. Время срабатывания может задерживаться. После перезапуска Chrome включите заново.</footer>
+  <script type="module" src="popup.js"></script>
+</body></html>
