@@ -6,14 +6,20 @@
   <section class="status" aria-live="polite"><strong id="status">Проверяем…</strong><p id="details"></p><p id="count"></p></section>
   <form id="form">
     <label for="mode">Что автоматизировать</label>
-    <select id="mode"><option value="schedule">Вход и выход по расписанию</option><option value="manual">Только выход из открытой вкладки</option></select>
+    <select id="mode"><option value="schedule">Вход и выход по расписанию</option><option value="manual">Только выход из вкладки Teams</option></select>
     <div id="scheduleFields">
+      <label for="provider">Сервис</label><select id="provider"><option value="teams">Microsoft Teams — в Chrome</option><option value="zoom">Zoom — приложение Windows</option></select>
+      <div id="zoomSetup" hidden>
+        <small>Для Zoom нужен помощник Windows. Установите его один раз по инструкции, затем проверьте связь. Рабочий стол должен быть разблокирован.</small>
+        <button id="zoomPing" type="button">Проверить помощник Zoom</button><p id="zoomStatus" role="status"></p>
+        <label><input id="zoomPrepared" type="checkbox"> В Zoom настроен вход с выключенными камерой и микрофоном</label>
+      </div>
       <label for="title">Название</label><input id="title" maxlength="100" placeholder="Еженедельная встреча">
-      <label for="url">Постоянная ссылка Teams</label><input id="url" type="url" placeholder="https://teams.microsoft.com/…">
+      <label for="url" id="urlLabel">Постоянная ссылка Teams</label><input id="url" type="url" placeholder="https://teams.microsoft.com/…">
       <label for="joinAt">Первый вход — дата и время</label><input id="joinAt" type="datetime-local">
       <label for="repeat">Повторять</label><select id="repeat"><option value="weekly" selected>Каждую неделю в этот день</option><option value="weekdays">По будням</option><option value="daily">Каждый день</option><option value="once">Один раз</option></select>
       <label for="guestName">Имя для гостевого входа (необязательно)</label><input id="guestName" maxlength="100" placeholder="Если Teams попросит представиться">
-      <small>Вход с выключенными камерой и микрофоном. Войдите в аккаунт Teams и настройте доступы заранее. Зал ожидания требует допуска организатора.</small>
+      <small id="joinHint">Вход с выключенными камерой и микрофоном. Войдите в аккаунт Teams и настройте доступы заранее. Зал ожидания требует допуска организатора.</small>
     </div>
     <div id="tabFields" hidden><label for="tab">Вкладка конференции</label><div class="row"><select id="tab"></select><button id="refresh" type="button" title="Обновить список вкладок">↻</button></div></div>
     <fieldset><legend><label><input type="checkbox" id="timed"> Закрыть в назначенное время</label></legend><input type="datetime-local" id="deadline" aria-label="Дата и время закрытия"><small>Местное время компьютера</small></fieldset>

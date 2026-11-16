@@ -1,7 +1,7 @@
 {
   "name": "skip-sozvon",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test", "check": "node --check extension/background.js && node --check extension/schedule.js && node --check extension/joiner.js && node --check extension/close-tab.js && node --check extension/content.js && node --check extension/popup.js" }
+  "scripts": { "test": "node --test", "check": "node --check extension/background.js && node --check extension/zoom.js && node --check extension/schedule.js && node --check extension/joiner.js && node --check extension/close-tab.js && node --check extension/content.js && node --check extension/popup.js" }
 }

@@ -16,7 +16,7 @@ function renderLists() {
   for (const job of schedules) {
     const card = document.createElement("article"); card.className = "job";
     const title = document.createElement("strong"); title.textContent = job.title;
-    const next = document.createElement("p"); next.textContent = `${repeatLabels[job.repeat]} · ${job.enabled ? "Вход " + formatDate(job.nextAt) : "Выключено"}`;
+    const next = document.createElement("p"); next.textContent = `${job.provider === "zoom" ? "Zoom" : "Teams"} · ${repeatLabels[job.repeat]} · ${job.enabled ? "Вход " + formatDate(job.nextAt) : "Выключено"}`;
     const result = document.createElement("p"); result.textContent = job.lastStatus;
     const exit = document.createElement("p");
     const conditions = [];
@@ -32,7 +32,7 @@ function renderLists() {
   const active = document.createDocumentFragment();
   for (const watch of activeWatches) {
     const card = document.createElement("article"); card.className = "job";
-    const title = document.createElement("strong"); title.textContent = watch.title || "Teams";
+    const title = document.createElement("strong"); title.textContent = `${watch.provider === "zoom" ? "Zoom" : "Teams"} · ${watch.title || "Конференция"}`;
     const status = document.createElement("p"); status.textContent = watch.status;
     const fresh = watch.lastReadAt && Date.now() - watch.lastReadAt <= 20000;
     const count = document.createElement("p"); count.textContent = watch.config.drop && watch.phase !== "joining" ? (fresh && Number.isInteger(watch.count) ? `Участников: ${watch.count}` : watch.source || "Ждём счётчик участников…") : "";
@@ -54,7 +54,7 @@ async function status() {
   const result = await send({ type: "STATUS" });
   state = result.state; activeWatches = result.watches || []; schedules = result.schedules || [];
   const upcoming = schedules.filter(j => j.enabled && j.nextAt).sort((a, b) => a.nextAt - b.nextAt)[0];
-  $("status").textContent = activeWatches.length ? `Автоматизация вкладок: ${activeWatches.length}` : upcoming ? "Расписание включено" : state?.status || "Добавьте конференцию в расписание";
+  $("status").textContent = activeWatches.length ? `Активных запусков: ${activeWatches.length}` : upcoming ? "Расписание включено" : state?.status || "Добавьте конференцию в расписание";
   $("details").textContent = upcoming ? `Ближайшая: ${upcoming.title} · ${formatDate(upcoming.nextAt)}` : "Настройте вход по ссылке или выход из открытой вкладки.";
   const stale = !state?.lastReadAt || Date.now() - state.lastReadAt > 20000;
   $("count").textContent = state?.active && state.config.drop ? (!stale && Number.isInteger(state.count) ? `Участников: ${state.count} · ${state.source}` : stale ? "Ждём актуальное число участников…" : state.source) : "";
@@ -75,7 +75,22 @@ function syncMode() {
   for (const id of ["url", "joinAt", "repeat"]) { $(id).required = scheduled; $(id).disabled = !scheduled; }
   $("tab").required = !scheduled;
   $("start").textContent = scheduled ? "Добавить в расписание" : "Включить автозакрытие";
+  syncProvider();
 }
+function syncProvider() {
+  const zoom = $("mode").value === "schedule" && $("provider").value === "zoom";
+  $("zoomSetup").hidden = !zoom;
+  $("zoomPrepared").required = zoom; $("zoomPrepared").disabled = !zoom;
+  $("urlLabel").textContent = zoom ? "Постоянная ссылка Zoom" : "Постоянная ссылка Teams";
+  $("url").placeholder = zoom ? "https://…zoom.us/j/12345678901?pwd=…" : "https://teams.microsoft.com/…";
+  $("joinHint").textContent = zoom ? "Используйте ссылку приглашения с /j/ и ID конференции. Одновременно поддерживается одна конференция Zoom. Авторизация и допуск организатора могут потребовать участия." : "Вход с выключенными камерой и микрофоном. Войдите в аккаунт Teams и настройте доступы заранее. Зал ожидания требует допуска организатора.";
+}
+$("provider").onchange = syncProvider;
+$("zoomPing").onclick = () => run(async () => {
+  $("zoomStatus").textContent = "Проверяем…";
+  try { const { helper } = await send({ type: "ZOOM_PING" }); $("zoomStatus").textContent = helper.zoomInstalled ? `Помощник ${helper.version} подключён. Zoom найден.` : "Помощник подключён. Установите Zoom Workplace для Windows."; }
+  catch (error) { $("zoomStatus").textContent = error.message; throw error; }
+});
 $("mode").onchange = () => { syncMode(); if ($("mode").value === "manual") refreshTabs().catch(e => { $("error").textContent = e.message; }); };
 async function run(fn) {
   if (busy) return; busy = true; $("error").textContent = ""; $("start").disabled = true;
@@ -86,7 +101,7 @@ $("form").onsubmit = event => { event.preventDefault(); run(async () => {
   const config = { timed: $("timed").checked, drop: $("drop").checked, deadline: new Date($("deadline").value).getTime(), selector: "" };
   for (const key of ["percent", "minimum", "windowSeconds", "graceSeconds"]) config[key] = Number($(key).value);
   if ($("mode").value === "schedule") {
-    await send({ type: "SCHEDULE_ADD", schedule: { title: $("title").value, url: $("url").value, joinAt: new Date($("joinAt").value).getTime(), repeat: $("repeat").value, guestName: $("guestName").value, config } });
+    await send({ type: "SCHEDULE_ADD", schedule: { provider: $("provider").value, zoomPrepared: $("zoomPrepared").checked, title: $("title").value, url: $("url").value, joinAt: new Date($("joinAt").value).getTime(), repeat: $("repeat").value, guestName: $("guestName").value, config } });
   } else {
     const tabId = Number($("tab").value);
     if (!tabId) throw Error("Откройте вкладку Teams.");

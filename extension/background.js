@@ -1,6 +1,7 @@
 import { isTeams, validate, observe } from "./rules.js";
 import { closeTabWithConfirmation } from "./close-tab.js";
 import { createScheduler, JOIN_PREFIX, SCHEDULE_CHECK } from "./schedule.js";
+import { ZoomBridge } from "./zoom.js";
 
 const KEY = "watch";
 const ALARM = "sozvon-check";
@@ -10,7 +11,21 @@ const get = async (key = KEY) => (await chrome.storage.session.get(key))[key] ??
 const save = state => chrome.storage.session.set({ [state.watchKey || KEY]: state });
 const watches = async () => Object.entries(await chrome.storage.session.get(null)).filter(([key, value]) => (key === KEY || key.startsWith("watch:")) && value?.active).map(([, value]) => value);
 const deadlineAlarm = state => state.watchKey && state.watchKey !== KEY ? `sozvon-deadline:${state.watchKey}` : "sozvon-deadline";
-const tell = (id, message) => chrome.tabs.sendMessage(id, message).catch(() => null);
+const tell = (id, message) => Number.isInteger(id) ? chrome.tabs.sendMessage(id, message).catch(() => null) : Promise.resolve(null);
+
+const zoom = new ZoomBridge(chrome,
+  state => serial(() => applyZoomStatus(state)).catch(console.error),
+  reason => serial(async () => { for (const state of await watches()) if (state.provider === "zoom") await finish(state, reason + " Автоматизация остановлена, проверьте конференцию вручную."); }).catch(console.error));
+
+async function applyZoomStatus(native) {
+  if (!native?.runId) return;
+  const state = (await watches()).find(w => w.provider === "zoom" && w.runId === native.runId);
+  if (!state) return;
+  if (!native.active) return finish(state, native.status || "Zoom: автоматизация завершена");
+  const next = { ...state, phase: native.phase, status: native.status, count: native.count ?? null, source: "Счётчик Zoom", lastReadAt: native.at, candidate: native.candidateAt ? { at: native.candidateAt } : null };
+  await save(next);
+  if (next.phase !== state.phase) await scheduler.updateStatus(state.scheduleId, next.status);
+}
 
 async function finish(state, status) {
   await save({ ...state, active: false, status, candidate: null, samples: [] });
@@ -46,6 +61,13 @@ async function close(state, reason) {
 
 async function tickWatch(state) {
   if (!state?.active) return;
+  if (state.provider === "zoom") {
+    try {
+      const result = await zoom.request("STATUS");
+      if (result.state?.runId !== state.runId) return finish(state, "Помощник потерял связь с этим запуском Zoom. Проверьте конференцию вручную.");
+      return applyZoomStatus(result.state);
+    } catch (error) { return finish(state, error.message); }
+  }
   const now = Date.now();
   if (state.phase === "joining") {
     const tab = await chrome.tabs.get(state.tabId).catch(() => null);
@@ -95,6 +117,14 @@ async function arm(state) {
 }
 
 const scheduler = createScheduler(chrome, async (job, config) => {
+  if (job.provider === "zoom") {
+    if ((await watches()).some(w => w.provider === "zoom")) throw Error("Другая конференция Zoom уже управляется расширением. Одновременно поддерживается один Zoom.");
+    const runId = crypto.randomUUID();
+    const result = await zoom.request("START", { runId, url: job.url, guestName: job.guestName, zoomPrepared: job.zoomPrepared, config });
+    await arm({ watchKey: `watch:${job.id}`, provider: "zoom", scheduleId: job.id, active: true, runId,
+      title: job.title, config, phase: "joining", samples: [], count: null, status: result.state?.status || "Подключаемся к Zoom…" });
+    return;
+  }
   const tab = await chrome.tabs.create({ url: job.url, active: true });
   await arm({ watchKey: `watch:${job.id}`, scheduleId: job.id, active: true, tabId: tab.id, url: job.url,
     title: job.title, config, phase: "joining", guestName: job.guestName, joinStartedAt: Date.now(),
@@ -106,14 +136,23 @@ async function handle(message, sender) {
   // Page scripts may only request a tick or cancel their own monitoring.
   if (sender.tab && (sender.tab.id !== state?.tabId || !["TICK", "STOP"].includes(message.type))) return { ok: false };
   if (message.type === "STATUS") return { ok: true, state, watches: await watches(), schedules: await scheduler.list() };
-  if (message.type === "SCHEDULE_ADD") { const job = await scheduler.add(message.schedule); return { ok: true, job }; }
+  if (message.type === "ZOOM_PING") return { ok: true, helper: await zoom.request("PING") };
+  if (message.type === "SCHEDULE_ADD") {
+    if (message.schedule?.provider === "zoom") {
+      const info = await zoom.request("PING");
+      if (!info.zoomInstalled) throw Error("Помощник подключён, но Zoom не установлен. Установите Zoom Workplace для Windows.");
+    }
+    const job = await scheduler.add(message.schedule); return { ok: true, job };
+  }
   if (message.type === "SCHEDULE_TOGGLE") { await scheduler.toggle(message.id); return { ok: true }; }
   if (message.type === "SCHEDULE_REMOVE") {
     const active = await get(`watch:${message.id}`);
+    if (active?.active && active.provider === "zoom") await zoom.request("STOP", { runId: active.runId });
     if (active?.active) await finish(active, "Задание удалено. Автоматизация этой вкладки остановлена.");
     await scheduler.remove(message.id); return { ok: true };
   }
   if (message.type === "STOP") {
+    if (state?.active && state.provider === "zoom") await zoom.request("STOP", { runId: state.runId });
     if (state?.active) await finish(state, "Автозакрытие отменено");
     return { ok: true };
   }

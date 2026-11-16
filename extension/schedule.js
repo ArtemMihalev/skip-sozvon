@@ -1,12 +1,18 @@
 import { isTeams, validate } from "./rules.js";
+import { parseZoomLink } from "./zoom.js";
 
 export const JOIN_PREFIX = "sozvon-join:";
 export const SCHEDULE_CHECK = "sozvon-schedules";
 export const LATE_LIMIT = 5 * 60 * 1000;
 
 export function validateSchedule(input, now = Date.now()) {
-  const url = String(input.url ?? "").trim();
-  if (!isTeams(url) || new URL(url).username || new URL(url).password || new URL(url).pathname === "/") throw Error("Укажите полную ссылку на конференцию Teams.");
+  let url = String(input.url ?? "").trim();
+  const provider = input.provider || "teams";
+  if (!["teams", "zoom"].includes(provider)) throw Error("Выберите Teams или Zoom.");
+  if (provider === "zoom") {
+    url = parseZoomLink(url).url;
+    if (input.zoomPrepared !== true) throw Error("Сначала настройте в Zoom вход с выключенными камерой и микрофоном и отметьте это в форме.");
+  } else if (!isTeams(url) || new URL(url).username || new URL(url).password || new URL(url).pathname === "/") throw Error("Укажите полную ссылку на конференцию Teams.");
   if (!Number.isFinite(input.joinAt) || input.joinAt <= now) throw Error("Укажите дату и время входа в будущем.");
   if (!["once", "daily", "weekdays", "weekly"].includes(input.repeat)) throw Error("Выберите повторение.");
   if (input.repeat === "weekdays" && [0, 6].includes(new Date(input.joinAt).getDay())) throw Error("Для повтора по будням выберите первый вход с понедельника по пятницу.");
@@ -15,7 +21,7 @@ export function validateSchedule(input, now = Date.now()) {
   const guestName = String(input.guestName ?? "").trim();
   if (guestName.length > 100) throw Error("Имя должно быть не длиннее 100 символов.");
   return {
-    id: crypto.randomUUID(), title: String(input.title ?? "").trim().slice(0, 100) || "Конференция Teams",
+    id: crypto.randomUUID(), provider, zoomPrepared: provider === "zoom", title: String(input.title ?? "").trim().slice(0, 100) || (provider === "zoom" ? "Конференция Zoom" : "Конференция Teams"),
     url, guestName, joinAt: input.joinAt, nextAt: input.joinAt, repeat: input.repeat,
     config, exitOffset: config.timed ? config.deadline - input.joinAt : null,
     enabled: true, lastStatus: "Ожидает запуска", lastOccurrence: null
@@ -71,7 +77,7 @@ export function createScheduler(api, launch, activeFor) {
       else {
         try {
           await launch(job, { ...job.config, deadline });
-          job.lastStatus = "Вкладка открыта. Подключаемся…";
+          job.lastStatus = job.provider === "zoom" ? "Zoom запущен. Подключаемся…" : "Вкладка открыта. Подключаемся…";
         } catch (error) { job.lastStatus = `Не удалось открыть конференцию: ${error.message}`; }
       }
       await write(jobs);
