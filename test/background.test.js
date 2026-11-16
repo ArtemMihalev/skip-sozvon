@@ -6,6 +6,7 @@ test("background targets one tab, survives worker reload, and disarms safely", a
   let now = 1000000;
   Date.now = () => now;
   let store = {};
+  let local = {};
   let messageHandler;
   const alarms = new Map();
   const removed = [];
@@ -17,9 +18,9 @@ test("background targets one tab, survives worker reload, and disarms safely", a
   };
   const onRemoved = event();
   globalThis.chrome = {
-    storage: { session: { get: async () => structuredClone(store), set: async value => { store = { ...store, ...structuredClone(value) }; } } },
-    runtime: { onMessage: { addListener(fn) { messageHandler = fn; } } },
-    alarms: { get: async name => alarms.get(name), create: async (name, value) => alarms.set(name, value), clear: async name => alarms.delete(name), onAlarm: event() },
+    storage: { session: { get: async () => structuredClone(store), set: async value => { store = { ...store, ...structuredClone(value) }; } }, local: { get: async () => structuredClone(local), set: async value => { local = { ...local, ...structuredClone(value) }; } } },
+    runtime: { onMessage: { addListener(fn) { messageHandler = fn; } }, onStartup: event(), onInstalled: event() },
+    alarms: { get: async name => alarms.get(name), getAll: async () => [...alarms].map(([name, value]) => ({ name, ...value })), create: async (name, value) => alarms.set(name, value), clear: async name => alarms.delete(name), onAlarm: event() },
     tabs: { get: async id => { if (id !== tab.id) throw Error("missing"); return { ...tab }; }, sendMessage: async (id, msg) => msg.type === "READ" ? { count, url: tab.url, source: "Test" } : { ok: true }, onRemoved, onUpdated: event() },
     debugger: { attach: async () => {}, detach: async () => {}, onEvent: event(), onDetach: event(), sendCommand: async (target, method) => { if (method === "Page.close") { removed.push(target.tabId); onRemoved.emit(target.tabId); } } }
   };

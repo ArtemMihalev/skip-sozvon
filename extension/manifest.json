@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Созвон — автозакрытие Teams",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Закрывает выбранную вкладку Teams по времени или при оттоке участников.",
   "minimum_chrome_version": "120",
   "permissions": ["storage", "alarms", "scripting", "debugger"],
@@ -15,7 +15,7 @@
   },
   "content_scripts": [{
     "matches": ["https://teams.microsoft.com/*", "https://teams.live.com/*", "https://teams.cloud.microsoft/*"],
-    "js": ["reader.js", "content.js"],
+    "js": ["reader.js", "joiner.js", "content.js"],
     "run_at": "document_idle"
   }]
 }

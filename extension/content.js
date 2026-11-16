@@ -4,6 +4,10 @@
   let banner;
   function hide() { banner?.remove(); banner = null; }
   chrome.runtime.onMessage.addListener((message, sender, reply) => {
+    if (message.type === "AUTO_JOIN") {
+      if (location.href !== message.url) reply({ phase: "joining", status: "Страница меняется…", url: location.href });
+      else reply({ ...globalThis.SozvonJoiner.step(document, { guestName: message.guestName }), url: location.href });
+    }
     if (message.type === "READ") reply({ ...globalThis.SozvonReader.read(document, message.selector), url: location.href });
     if (message.type === "HIDE") { hide(); reply({ ok: true }); }
     if (message.type === "WARN") {
